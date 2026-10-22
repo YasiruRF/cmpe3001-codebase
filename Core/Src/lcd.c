@@ -1,0 +1,191 @@
+#include "main.h"
+#include "lcd.h"
+#include "i2c.h"
+#include <stdint.h>
+#include <string.h>
+
+#define OLED_I2C_ADDR_3C (0x3C << 1)
+#define OLED_I2C_ADDR_3D (0x3D << 1)
+#define OLED_WIDTH 128
+#define OLED_HEIGHT 64
+#define OLED_BUFFER_SIZE (OLED_WIDTH * OLED_HEIGHT / 8)
+#define OLED_I2C_TIMEOUT 100
+#define OLED_GLYPH_SCALE 2
+#define OLED_GLYPH_ADVANCE 12
+#define OLED_LINE_HEIGHT 16
+#define OLED_CHARS_PER_LINE (OLED_WIDTH / OLED_GLYPH_ADVANCE)
+
+static const char font_chars[] = " ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789:.-%";
+static const uint8_t font[][5] = {
+	{0x00, 0x00, 0x00, 0x00, 0x00},
+	{0x7E, 0x11, 0x11, 0x11, 0x7E}, {0x7F, 0x49, 0x49, 0x49, 0x36},
+	{0x3E, 0x41, 0x41, 0x41, 0x22}, {0x7F, 0x41, 0x41, 0x22, 0x1C},
+	{0x7F, 0x49, 0x49, 0x49, 0x41}, {0x7F, 0x09, 0x09, 0x09, 0x01},
+	{0x3E, 0x41, 0x49, 0x49, 0x7A}, {0x7F, 0x08, 0x08, 0x08, 0x7F},
+	{0x00, 0x41, 0x7F, 0x41, 0x00}, {0x20, 0x40, 0x41, 0x3F, 0x01},
+	{0x7F, 0x08, 0x14, 0x22, 0x41}, {0x7F, 0x40, 0x40, 0x40, 0x40},
+	{0x7F, 0x02, 0x0C, 0x02, 0x7F}, {0x7F, 0x04, 0x08, 0x10, 0x7F},
+	{0x3E, 0x41, 0x41, 0x41, 0x3E}, {0x7F, 0x09, 0x09, 0x09, 0x06},
+	{0x3E, 0x41, 0x51, 0x21, 0x5E}, {0x7F, 0x09, 0x19, 0x29, 0x46},
+	{0x46, 0x49, 0x49, 0x49, 0x31}, {0x01, 0x01, 0x7F, 0x01, 0x01},
+	{0x3F, 0x40, 0x40, 0x40, 0x3F}, {0x1F, 0x20, 0x40, 0x20, 0x1F},
+	{0x3F, 0x40, 0x38, 0x40, 0x3F}, {0x63, 0x14, 0x08, 0x14, 0x63},
+	{0x07, 0x08, 0x70, 0x08, 0x07}, {0x61, 0x51, 0x49, 0x45, 0x43},
+	{0x3E, 0x51, 0x49, 0x45, 0x3E}, {0x00, 0x42, 0x7F, 0x40, 0x00},
+	{0x42, 0x61, 0x51, 0x49, 0x46}, {0x21, 0x41, 0x45, 0x4B, 0x31},
+	{0x18, 0x14, 0x12, 0x7F, 0x10}, {0x27, 0x45, 0x45, 0x45, 0x39},
+	{0x3C, 0x4A, 0x49, 0x49, 0x30}, {0x01, 0x71, 0x09, 0x05, 0x03},
+	{0x36, 0x49, 0x49, 0x49, 0x36}, {0x06, 0x49, 0x49, 0x29, 0x1E},
+	{0x00, 0x36, 0x36, 0x00, 0x00}, {0x00, 0x60, 0x60, 0x00, 0x00},
+	{0x08, 0x08, 0x08, 0x08, 0x08}, {0x63, 0x13, 0x08, 0x64, 0x63}
+};
+
+static uint8_t oled_buffer[OLED_BUFFER_SIZE];
+static uint16_t oled_address;
+static uint8_t oled_ready;
+
+static HAL_StatusTypeDef OLED_WriteCommandSequence(const uint8_t *commands, uint16_t length)
+{
+	uint8_t packet[32];
+	if (length > sizeof(packet) - 1) {
+		return HAL_ERROR;
+	}
+	packet[0] = 0x00;
+	memcpy(&packet[1], commands, length);
+	return HAL_I2C_Master_Transmit(&hi2c1, oled_address, packet, length + 1, OLED_I2C_TIMEOUT);
+}
+
+static HAL_StatusTypeDef OLED_Flush(void)
+{
+	uint8_t packet[OLED_WIDTH + 1];
+	packet[0] = 0x40;
+	for (uint8_t page = 0; page < OLED_HEIGHT / 8; page++) {
+		uint8_t commands[] = { (uint8_t)(0xB0 | page), 0x00, 0x10 };
+		if (OLED_WriteCommandSequence(commands, sizeof(commands)) != HAL_OK) {
+			return HAL_ERROR;
+		}
+		memcpy(&packet[1], &oled_buffer[page * OLED_WIDTH], OLED_WIDTH);
+		if (HAL_I2C_Master_Transmit(&hi2c1, oled_address, packet, sizeof(packet), OLED_I2C_TIMEOUT) != HAL_OK) {
+			return HAL_ERROR;
+		}
+	}
+	return HAL_OK;
+}
+
+static void OLED_DrawPixel(uint16_t x, uint16_t y)
+{
+	if (x < OLED_WIDTH && y < OLED_HEIGHT) {
+		oled_buffer[x + (y / 8) * OLED_WIDTH] |= (uint8_t)(1U << (y % 8));
+	}
+}
+
+static void OLED_DrawChar(char character, uint16_t x, uint16_t y)
+{
+	if (character >= 'a' && character <= 'z') {
+		character = (char)(character - 'a' + 'A');
+	}
+	const char *glyph = strchr(font_chars, character);
+	if (glyph == NULL) {
+		glyph = font_chars;
+	}
+	uint16_t glyph_index = (uint16_t)(glyph - font_chars);
+	for (uint16_t column = 0; column < 5; column++) {
+		for (uint16_t bit = 0; bit < 7; bit++) {
+			if ((font[glyph_index][column] & (1U << bit)) != 0) {
+				for (uint16_t scale_x = 0; scale_x < OLED_GLYPH_SCALE; scale_x++) {
+					for (uint16_t scale_y = 0; scale_y < OLED_GLYPH_SCALE; scale_y++) {
+						OLED_DrawPixel(x + column * OLED_GLYPH_SCALE + scale_x,
+								y + bit * OLED_GLYPH_SCALE + scale_y);
+					}
+				}
+			}
+		}
+	}
+}
+
+uint8_t OLED_Init(void)
+{
+	if (HAL_I2C_IsDeviceReady(&hi2c1, OLED_I2C_ADDR_3C, 2, OLED_I2C_TIMEOUT) == HAL_OK) {
+		oled_address = OLED_I2C_ADDR_3C;
+	} else if (HAL_I2C_IsDeviceReady(&hi2c1, OLED_I2C_ADDR_3D, 2, OLED_I2C_TIMEOUT) == HAL_OK) {
+		oled_address = OLED_I2C_ADDR_3D;
+	} else {
+		oled_ready = 0;
+		return 0;
+	}
+
+	HAL_Delay(100);
+	const uint8_t init_commands[] = {
+		0xAE, 0xD5, 0x80, 0xA8, 0x3F, 0xD3, 0x00, 0x40,
+		0x8D, 0x14, 0x20, 0x02, 0xA1, 0xC8, 0xDA, 0x12,
+		0x81, 0xCF, 0xD9, 0xF1, 0xDB, 0x40, 0xA4, 0xA6, 0xAF
+	};
+	if (OLED_WriteCommandSequence(init_commands, sizeof(init_commands)) == HAL_OK) {
+		oled_ready = 1;
+		OLED_Clear();
+	} else {
+		oled_ready = 0;
+	}
+	return oled_ready;
+}
+
+void OLED_Clear(void)
+{
+	memset(oled_buffer, 0, sizeof(oled_buffer));
+	if (oled_ready) {
+		OLED_Flush();
+	}
+}
+
+void OLED_WriteCenteredString(const char *str)
+{
+	if (!oled_ready || str == NULL) {
+		return;
+	}
+
+	uint16_t line_count = 0;
+	const char *line_start = str;
+	do {
+		const char *line_end = line_start;
+		while (*line_end != '\n' && *line_end != '\0') line_end++;
+		uint16_t line_length = (uint16_t)(line_end - line_start);
+		line_count += line_length == 0 ? 1 : (line_length + OLED_CHARS_PER_LINE - 1) / OLED_CHARS_PER_LINE;
+		if (*line_end == '\0') break;
+		line_start = line_end + 1;
+	} while (1);
+
+	uint16_t y = line_count * OLED_LINE_HEIGHT < OLED_HEIGHT
+		? (OLED_HEIGHT - line_count * OLED_LINE_HEIGHT) / 2 : 0;
+	line_start = str;
+	do {
+		const char *line_end = line_start;
+		while (*line_end != '\n' && *line_end != '\0') line_end++;
+		uint16_t remaining = (uint16_t)(line_end - line_start);
+		if (remaining == 0) {
+			y += OLED_LINE_HEIGHT;
+		} else {
+			while (remaining > 0 && y + OLED_LINE_HEIGHT - 2 <= OLED_HEIGHT) {
+				uint16_t chunk_length = remaining > OLED_CHARS_PER_LINE ? OLED_CHARS_PER_LINE : remaining;
+				uint16_t text_width = chunk_length * OLED_GLYPH_ADVANCE - 2;
+				uint16_t x = (OLED_WIDTH - text_width) / 2;
+				for (uint16_t character_index = 0; character_index < chunk_length; character_index++) {
+					OLED_DrawChar(line_start[character_index], x + character_index * OLED_GLYPH_ADVANCE, y);
+				}
+				line_start += chunk_length;
+				remaining -= chunk_length;
+				y += OLED_LINE_HEIGHT;
+			}
+		}
+		if (*line_end == '\0') break;
+		line_start = line_end + 1;
+	} while (y + OLED_LINE_HEIGHT - 2 <= OLED_HEIGHT);
+	OLED_Flush();
+}
+
+
+
+
+
+
+
+

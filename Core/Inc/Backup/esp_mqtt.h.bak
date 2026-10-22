@@ -1,0 +1,33 @@
+#ifndef ESP_MQTT_H
+#define ESP_MQTT_H
+
+#include "main.h"
+#include <stdint.h>
+
+/* Latest readings shared between main.c and the MQTT publisher */
+typedef struct {
+    float   dht_temp;
+    float   dht_hum;
+    float   ds_temp;
+    uint8_t dht_valid;
+    uint8_t ds_valid;
+} SensorData;
+
+/* 1) Start UART DMA reception + join WiFi (ESP-01S with stock AT firmware).
+ *    Returns 1 on success. Blocks up to ~30 s. */
+int MQTT_WifiInit(UART_HandleTypeDef *huart, const char *ssid, const char *pass);
+
+/* 2) Open a TLS TCP connection to the broker and send an MQTT 3.1.1 CONNECT.
+ *    user/pass may be NULL for a broker with no auth (e.g. the public test
+ *    broker on port 1883 - pass use_tls=0 for that case).
+ *    Returns 1 when the broker answers CONNACK "accepted". */
+int MQTT_BrokerConnect(const char *host, uint16_t port, uint8_t use_tls,
+                       const char *client_id, const char *user, const char *pass);
+
+/* 3) Publish (QoS 0). Returns 0 if sending failed -> call MQTT_BrokerConnect again. */
+int MQTT_Publish(const char *topic, const char *payload, uint8_t retain);
+
+/* IP the ESP got from your router (valid after MQTT_WifiInit succeeds) */
+const char *MQTT_GetIP(void);
+
+#endif

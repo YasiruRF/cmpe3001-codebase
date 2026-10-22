@@ -1,0 +1,224 @@
+/*
+ * Minimal MQTT 3.1.1 publisher on an ESP-01S running stock AT firmware.
+ * The ESP is used as a plain TCP/TLS pipe (AT+CIPSTART / AT+CIPSEND); the
+ * MQTT packets are built here, so no MQTT-capable AT firmware is needed.
+ *
+ * TLS ("SSL" in AT-command terms) requires an AT firmware build that
+ * includes SSL support and enough free heap for the handshake. Test this
+ * first by hand: AT+CIPSSLSIZE=4096 then AT+CIPSTART="SSL","host",443.
+ * If that fails or the module resets, your firmware build can't do TLS
+ * and you'll need to reflash it or use an unencrypted broker instead.
+ *
+ * RX is UART + circular DMA, so bytes are not lost while the DHT22 /
+ * DS18B20 bit-bang code is running.
+ */
+#include "esp_mqtt.h"
+#include <stdio.h>
+#include <string.h>
+
+#define RX_SIZE    1024
+#define WBUF_SIZE  384
+#define PKT_MAX    256
+
+static UART_HandleTypeDef *esp;
+static uint8_t  rx_buf[RX_SIZE];
+static uint16_t rx_tail = 0;
+static char     wbuf[WBUF_SIZE];
+static uint8_t  pkt[PKT_MAX];
+static char     ip_str[20] = "0.0.0.0";
+
+/* ---------- DMA ring-buffer helpers ---------- */
+static uint16_t rx_head(void)
+{
+    return (uint16_t)((RX_SIZE - __HAL_DMA_GET_COUNTER(esp->hdmarx)) % RX_SIZE);
+}
+
+static int rx_get(uint8_t *c)
+{
+    if (rx_tail == rx_head()) return 0;
+    *c = rx_buf[rx_tail];
+    rx_tail = (uint16_t)((rx_tail + 1) % RX_SIZE);
+    return 1;
+}
+
+static void rx_flush(void) { rx_tail = rx_head(); }
+
+/* ---------- AT helpers ---------- */
+static int wait_for(const char *token, uint32_t timeout_ms)
+{
+    uint16_t n = 0;
+    uint8_t  c;
+    uint32_t t0 = HAL_GetTick();
+
+    wbuf[0] = 0;
+    while ((HAL_GetTick() - t0) < timeout_ms) {
+        while (rx_get(&c)) {
+            if (c == 0) continue;
+            if (n >= WBUF_SIZE - 1) {
+                memmove(wbuf, wbuf + WBUF_SIZE / 2, n - WBUF_SIZE / 2);
+                n -= WBUF_SIZE / 2;
+            }
+            wbuf[n++] = (char)c;
+            wbuf[n] = 0;
+            if (strstr(wbuf, token)) return 1;
+        }
+    }
+    return 0;
+}
+
+static int send_cmd(const char *cmd, const char *expect, uint32_t timeout_ms)
+{
+    rx_flush();
+    HAL_UART_Transmit(esp, (uint8_t *)cmd, (uint16_t)strlen(cmd), 200);
+    HAL_UART_Transmit(esp, (uint8_t *)"\r\n", 2, 200);
+    return wait_for(expect, timeout_ms);
+}
+
+/* Send raw bytes over the open TCP/TLS connection */
+static int tcp_send(const uint8_t *data, uint16_t len)
+{
+    char cmd[24];
+
+    snprintf(cmd, sizeof(cmd), "AT+CIPSEND=%u", len);
+    if (!send_cmd(cmd, ">", 1000)) return 0;
+    HAL_UART_Transmit(esp, (uint8_t *)data, len, 2000);
+    return wait_for("SEND OK", 5000);          /* TLS sends take longer */
+}
+
+/* ---------- WiFi ---------- */
+int MQTT_WifiInit(UART_HandleTypeDef *huart, const char *ssid, const char *pass)
+{
+    char cmd[96];
+    int  alive = 0;
+
+    esp = huart;
+    rx_tail = 0;
+    if (HAL_UART_Receive_DMA(esp, rx_buf, RX_SIZE) != HAL_OK) return 0;
+    CLEAR_BIT(esp->Instance->CR3, USART_CR3_EIE);   /* ignore framing errors */
+
+    send_cmd("AT+RST", "ready", 4000);
+    HAL_Delay(500);
+
+    for (int i = 0; i < 5 && !alive; i++) alive = send_cmd("AT", "OK", 500);
+    if (!alive) return 0;
+
+    send_cmd("ATE0", "OK", 500);
+    if (!send_cmd("AT+CWMODE=1", "OK", 1000)) return 0;
+
+    snprintf(cmd, sizeof(cmd), "AT+CWJAP=\"%s\",\"%s\"", ssid, pass);
+    if (!send_cmd(cmd, "OK", 20000)) return 0;
+
+    if (!send_cmd("AT+CIPMUX=0", "OK", 1000)) return 0;   /* single connection */
+
+    if (send_cmd("AT+CIFSR", "OK", 1000)) {
+        char *p = strstr(wbuf, "STAIP,\"");
+        if (p) {
+            p += 7;
+            char *q = strchr(p, '"');
+            if (q && (size_t)(q - p) < sizeof(ip_str)) {
+                memcpy(ip_str, p, (size_t)(q - p));
+                ip_str[q - p] = 0;
+            }
+        }
+    }
+    return 1;
+}
+
+const char *MQTT_GetIP(void) { return ip_str; }
+
+/* ---------- MQTT ---------- */
+
+/* MQTT "remaining length" varint; returns number of bytes written */
+static uint8_t put_remlen(uint8_t *p, uint16_t x)
+{
+    uint8_t n = 0;
+    do {
+        uint8_t b = x % 128;
+        x /= 128;
+        if (x) b |= 0x80;
+        p[n++] = b;
+    } while (x);
+    return n;
+}
+
+static uint16_t put_str(uint8_t *p, const char *s)
+{
+    uint16_t l = (uint16_t)strlen(s);
+    p[0] = (uint8_t)(l >> 8);
+    p[1] = (uint8_t)(l & 0xFF);
+    memcpy(p + 2, s, l);
+    return (uint16_t)(l + 2);
+}
+
+int MQTT_BrokerConnect(const char *host, uint16_t port, uint8_t use_tls,
+                       const char *client_id, const char *user, const char *pass)
+{
+    char     cmd[110];
+    uint8_t  body[PKT_MAX];
+    uint16_t n = 0;
+    uint8_t  flags = 0x02;                     /* clean session */
+
+    send_cmd("AT+CIPCLOSE", "OK", 500);        /* ignore result */
+
+    if (use_tls) {
+        /* Give the SSL session buffer some headroom; harmless if unsupported. */
+        send_cmd("AT+CIPSSLSIZE=4096", "OK", 1000);
+        snprintf(cmd, sizeof(cmd), "AT+CIPSTART=\"SSL\",\"%s\",%u", host, port);
+    } else {
+        snprintf(cmd, sizeof(cmd), "AT+CIPSTART=\"TCP\",\"%s\",%u", host, port);
+    }
+    if (!send_cmd(cmd, "OK", 12000)) return 0;  /* TLS handshake is slower */
+    HAL_Delay(200);
+
+    /* ----- variable header + payload of CONNECT ----- */
+    if (user) flags |= 0x80;
+    if (user && pass) flags |= 0x40;
+
+    body[n++] = 0x00; body[n++] = 0x04;
+    body[n++] = 'M'; body[n++] = 'Q'; body[n++] = 'T'; body[n++] = 'T';
+    body[n++] = 0x04;                           /* protocol level 3.1.1 */
+    body[n++] = flags;
+    body[n++] = 0x00; body[n++] = 60;           /* keep-alive 60 s */
+    n += put_str(body + n, client_id);
+    if (user)         n += put_str(body + n, user);
+    if (user && pass) n += put_str(body + n, pass);
+
+    /* ----- fixed header ----- */
+    uint16_t total = 0;
+    pkt[total++] = 0x10;
+    total += put_remlen(pkt + total, n);
+    memcpy(pkt + total, body, n);
+    total += n;
+
+    if (!tcp_send(pkt, total)) return 0;
+
+    /* ----- wait for CONNACK: "+IPD,4:" 0x20 0x02 <flags> <return code> ----- */
+    if (!wait_for("+IPD,4:", 4000)) return 0;
+
+    uint8_t  ack[4];
+    uint8_t  got = 0;
+    uint32_t t0 = HAL_GetTick();
+    while (got < 4 && (HAL_GetTick() - t0) < 1000) {
+        uint8_t c;
+        if (rx_get(&c)) ack[got++] = c;
+    }
+    return (got == 4 && ack[0] == 0x20 && ack[3] == 0x00);
+}
+
+int MQTT_Publish(const char *topic, const char *payload, uint8_t retain)
+{
+    uint16_t tl = (uint16_t)strlen(topic);
+    uint16_t pl = (uint16_t)strlen(payload);
+    uint16_t rem = (uint16_t)(2 + tl + pl);
+    uint16_t total = 0;
+
+    if ((uint32_t)rem + 4 > PKT_MAX) return 0;
+
+    pkt[total++] = retain ? 0x31 : 0x30;        /* PUBLISH, QoS 0 */
+    total += put_remlen(pkt + total, rem);
+    total += put_str(pkt + total, topic);
+    memcpy(pkt + total, payload, pl);
+    total += pl;
+
+    return tcp_send(pkt, total);
+}

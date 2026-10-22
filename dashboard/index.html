@@ -1,0 +1,649 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#101915">
+  <title>Fieldnote | Sensor Dashboard</title>
+  <style>
+    :root {
+      color-scheme: dark;
+      --bg: #101915;
+      --panel: #18231e;
+      --panel-raised: #1d2a24;
+      --border: #2a3931;
+      --text: #eef4ed;
+      --muted: #9eafa3;
+      --green: #b7e4a2;
+      --green-dark: #263b2c;
+      --amber: #f2c879;
+      --red: #f08c83;
+      --radius: 18px;
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      min-width: 280px;
+      min-height: 100vh;
+      background:
+        radial-gradient(ellipse at 12% 0%, rgba(106, 150, 107, .12), transparent 34rem),
+        var(--bg);
+      color: var(--text);
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      letter-spacing: -.01em;
+    }
+
+    button, input { font: inherit; }
+    button { cursor: pointer; }
+
+    .shell { width: min(1120px, calc(100% - 40px)); margin: 0 auto; }
+
+    header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      min-height: 86px;
+      border-bottom: 1px solid rgba(158, 175, 163, .14);
+    }
+
+    .brand { display: flex; align-items: center; gap: 12px; }
+    .brand-mark {
+      display: grid;
+      width: 38px;
+      height: 38px;
+      place-items: center;
+      border: 1px solid #46664d;
+      border-radius: 12px;
+      background: var(--green-dark);
+      color: var(--green);
+      font-size: 19px;
+    }
+    .brand-name { font-size: 15px; font-weight: 700; letter-spacing: .04em; }
+    .brand-caption { margin-top: 2px; color: var(--muted); font-size: 11px; }
+
+    .connection-pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 8px 12px;
+      border: 1px solid var(--border);
+      border-radius: 999px;
+      color: var(--muted);
+      font-size: 12px;
+    }
+    .connection-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: #748078;
+    }
+    .connection-pill[data-state="connected"] { border-color: #476b4d; color: var(--green); }
+    .connection-pill[data-state="connected"] .connection-dot { background: var(--green); box-shadow: 0 0 12px #b7e4a266; }
+    .connection-pill[data-state="connecting"] .connection-dot { background: var(--amber); }
+    .connection-pill[data-state="error"] .connection-dot { background: var(--red); }
+
+    main { padding: 42px 0 52px; }
+    .intro { display: flex; justify-content: space-between; align-items: end; gap: 24px; margin-bottom: 28px; }
+    .eyebrow { color: var(--green); font-size: 11px; font-weight: 700; letter-spacing: .16em; text-transform: uppercase; }
+    h1 { margin: 9px 0 7px; font-size: clamp(28px, 4vw, 40px); line-height: 1.08; letter-spacing: -.045em; }
+    .intro p { max-width: 540px; margin: 0; color: var(--muted); font-size: 14px; line-height: 1.65; }
+    .updated { color: var(--muted); font-size: 12px; white-space: nowrap; }
+
+    .grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; }
+    .card, .settings, .feed {
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      background: linear-gradient(145deg, rgba(29, 42, 36, .96), rgba(22, 32, 27, .96));
+    }
+    .card { min-height: 192px; padding: 21px; }
+    .card-top { display: flex; justify-content: space-between; align-items: center; }
+    .metric-label { color: var(--muted); font-size: 12px; font-weight: 600; letter-spacing: .03em; }
+    .metric-icon { color: #c3d8c5; font-size: 16px; }
+    .metric-value { margin-top: 23px; font-size: clamp(36px, 5vw, 52px); font-weight: 550; letter-spacing: -.06em; line-height: 1; }
+    .metric-value .unit { margin-left: 5px; color: var(--muted); font-size: 17px; letter-spacing: 0; }
+    .metric-foot { display: flex; justify-content: space-between; align-items: center; margin-top: 17px; color: var(--muted); font-size: 11px; }
+    .metric-foot strong { color: var(--text); font-weight: 600; }
+
+    .light-card { border-color: #485942; background: linear-gradient(145deg, #27372a, #1a271f); }
+    .light-card .metric-value { color: #e4f2d9; }
+    .meter { height: 5px; margin-top: 15px; overflow: hidden; border-radius: 10px; background: #405044; }
+    .meter-fill { width: 0; height: 100%; border-radius: inherit; background: var(--green); transition: width .35s ease; }
+
+    .lower-grid { display: grid; grid-template-columns: minmax(0, 1.35fr) minmax(290px, .85fr); gap: 14px; margin-top: 14px; }
+    .settings, .feed { padding: 22px; }
+    .section-heading { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 18px; }
+    h2 { margin: 0; font-size: 15px; font-weight: 650; letter-spacing: -.02em; }
+    .section-hint { color: var(--muted); font-size: 11px; }
+    .form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 13px; }
+    .field { display: flex; flex-direction: column; gap: 7px; min-width: 0; }
+    .field-wide { grid-column: 1 / -1; }
+    label { color: #c4d0c7; font-size: 11px; font-weight: 600; }
+    input {
+      width: 100%;
+      min-height: 42px;
+      padding: 0 12px;
+      border: 1px solid #35463b;
+      border-radius: 10px;
+      outline: none;
+      background: #121b16;
+      color: var(--text);
+      font-size: 12px;
+    }
+    input:focus { border-color: #88b17d; box-shadow: 0 0 0 3px #88b17d20; }
+    input::placeholder { color: #6f8175; }
+    .actions { display: flex; align-items: center; gap: 10px; margin-top: 15px; }
+    .primary, .secondary {
+      min-height: 40px;
+      padding: 0 15px;
+      border: 1px solid transparent;
+      border-radius: 10px;
+      font-size: 12px;
+      font-weight: 700;
+    }
+    .primary { background: var(--green); color: #172219; }
+    .primary:hover { background: #c9f0b8; }
+    .secondary { border-color: var(--border); background: transparent; color: var(--muted); }
+    .secondary:hover { color: var(--text); }
+    button:disabled { cursor: not-allowed; opacity: .6; }
+    .form-message { min-height: 16px; margin-top: 11px; color: var(--muted); font-size: 11px; line-height: 1.5; }
+    .form-message[data-kind="error"] { color: var(--red); }
+    .form-message[data-kind="success"] { color: var(--green); }
+    .security-note { margin: 13px 0 0; color: #829388; font-size: 10px; line-height: 1.55; }
+
+    .feed-list { display: flex; flex-direction: column; gap: 11px; }
+    .feed-item { display: flex; justify-content: space-between; gap: 16px; padding-bottom: 11px; border-bottom: 1px solid rgba(158, 175, 163, .12); font-size: 11px; }
+    .feed-item:last-child { padding-bottom: 0; border-bottom: 0; }
+    .feed-key { color: var(--muted); }
+    .feed-value { color: var(--text); text-align: right; overflow-wrap: anywhere; }
+    .feed-empty { color: var(--muted); font-size: 12px; line-height: 1.6; }
+    .alert-panel {
+      margin-top: 14px;
+      padding: 18px 21px;
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      background: var(--panel);
+    }
+    .alert-panel[data-state="alert"] { border-color: #76563b; background: #30261d; }
+    .alert-panel[data-state="ok"] { border-color: #3c6044; }
+    .alert-panel[data-state="watch"] { border-color: #68704a; background: #282b1e; }
+    .alert-panel[data-state="critical"] { border-color: #824b46; background: #321f20; }
+    .alert-title { font-size: 13px; font-weight: 700; }
+    .alert-text { margin-top: 5px; color: var(--muted); font-size: 12px; line-height: 1.6; }
+    .history {
+      margin-top: 14px;
+      padding: 22px;
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      background: linear-gradient(145deg, rgba(29, 42, 36, .96), rgba(22, 32, 27, .96));
+    }
+    .history-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
+    .history-card { min-width: 0; padding: 14px; border: 1px solid rgba(158, 175, 163, .12); border-radius: 13px; background: rgba(16, 25, 21, .55); }
+    .history-label { display: flex; justify-content: space-between; gap: 8px; color: var(--muted); font-size: 11px; font-weight: 650; }
+    .history-value { color: var(--text); font-size: 12px; font-weight: 700; }
+    .history-card canvas { display: block; width: 100%; height: 112px; margin-top: 9px; }
+    .share-hint { margin: 10px 0 0; color: #829388; font-size: 10px; line-height: 1.5; }
+    footer { padding: 20px 0 28px; border-top: 1px solid rgba(158, 175, 163, .14); color: #829388; font-size: 10px; line-height: 1.6; }
+    footer a { color: var(--green); text-decoration: none; }
+    footer a:hover { text-decoration: underline; }
+
+    @media (max-width: 760px) {
+      .shell { width: min(100% - 28px, 560px); }
+      header { min-height: 72px; }
+      main { padding-top: 32px; }
+      .intro { align-items: start; flex-direction: column; gap: 12px; margin-bottom: 20px; }
+      .grid { grid-template-columns: 1fr 1fr; }
+      .card { min-height: 170px; padding: 17px; }
+      .light-card { grid-column: 1 / -1; min-height: 162px; }
+      .history-grid { grid-template-columns: 1fr; }
+      .history-card canvas { height: 100px; }
+      .lower-grid { grid-template-columns: 1fr; }
+      .metric-value { margin-top: 18px; }
+    }
+    @media (max-width: 430px) {
+      .shell { width: calc(100% - 22px); }
+      .grid { gap: 9px; }
+      .card { padding: 14px; }
+      .settings, .feed { padding: 17px; }
+      .history { padding: 17px; }
+      .form-grid { grid-template-columns: 1fr; }
+      .field-wide { grid-column: auto; }
+      .connection-pill { padding: 7px 9px; font-size: 10px; }
+    }
+  </style>
+</head>
+<body>
+  <div class="shell">
+    <header>
+      <div class="brand">
+        <div class="brand-mark" aria-hidden="true">⌁</div>
+        <div>
+          <div class="brand-name">FIELDNOTE</div>
+          <div class="brand-caption">Connected environment monitor</div>
+        </div>
+      </div>
+      <div class="connection-pill" id="connectionPill" data-state="disconnected" role="status" aria-live="polite">
+        <span class="connection-dot" aria-hidden="true"></span>
+        <span id="connectionText">Not connected</span>
+      </div>
+    </header>
+
+    <main>
+      <section class="intro" aria-labelledby="pageTitle">
+        <div>
+          <div class="eyebrow">Live device feed</div>
+          <h1 id="pageTitle">Your environment,<br>at a glance.</h1>
+          <p>Live temperature, humidity, and light readings from your STM32 sensor node.</p>
+        </div>
+        <div class="updated" id="updatedAt">Waiting for first reading</div>
+      </section>
+
+      <section class="grid" aria-label="Current sensor readings">
+        <article class="card">
+          <div class="card-top"><div class="metric-label">TEMPERATURE</div><div class="metric-icon" aria-hidden="true">°</div></div>
+          <div class="metric-value"><span id="temperature">--.-</span><span class="unit">°C</span></div>
+          <div class="metric-foot"><span>Air temperature</span><strong id="temperatureState">Waiting</strong></div>
+        </article>
+
+        <article class="card">
+          <div class="card-top"><div class="metric-label">HUMIDITY</div><div class="metric-icon" aria-hidden="true">◌</div></div>
+          <div class="metric-value"><span id="humidity">--.-</span><span class="unit">%</span></div>
+          <div class="metric-foot"><span>Relative humidity</span><strong id="humidityState">Waiting</strong></div>
+        </article>
+
+        <article class="card light-card">
+          <div class="card-top"><div class="metric-label">LIGHT LEVEL</div><div class="metric-icon" aria-hidden="true">☼</div></div>
+          <div class="metric-value"><span id="lightPercent">--</span><span class="unit">%</span></div>
+          <div class="meter" aria-label="Relative light level"><div class="meter-fill" id="lightMeter"></div></div>
+          <div class="metric-foot"><span>Relative brightness · not calibrated lux</span><strong id="lightStatus">Waiting</strong></div>
+        </article>
+      </section>
+
+      <section class="alert-panel" id="alertPanel" data-state="waiting" aria-live="polite">
+        <div class="alert-title" id="alertTitle">Tier alerts are waiting for data</div>
+        <div class="alert-text" id="alertText">Connect to your public ThingSpeak channel to evaluate the scouting and plant-stress conditions.</div>
+      </section>
+
+      <section class="history" aria-labelledby="historyTitle">
+        <div class="section-heading">
+          <h2 id="historyTitle">Recent trends</h2>
+          <span class="section-hint" id="historyHint">Last 20 channel updates</span>
+        </div>
+        <div class="history-grid">
+          <article class="history-card">
+            <div class="history-label"><span>Temperature</span><span class="history-value" id="historyTemperature">—</span></div>
+            <canvas id="temperatureChart" role="img" aria-label="Recent temperature trend"></canvas>
+          </article>
+          <article class="history-card">
+            <div class="history-label"><span>Humidity</span><span class="history-value" id="historyHumidity">—</span></div>
+            <canvas id="humidityChart" role="img" aria-label="Recent humidity trend"></canvas>
+          </article>
+          <article class="history-card">
+            <div class="history-label"><span>Light</span><span class="history-value" id="historyLight">—</span></div>
+            <canvas id="lightChart" role="img" aria-label="Recent light trend"></canvas>
+          </article>
+        </div>
+      </section>
+
+      <section class="lower-grid" aria-label="Connection and message information">
+        <article class="settings">
+          <div class="section-heading">
+            <h2>ThingSpeak channel</h2>
+            <span class="section-hint">Public channel · updates every 15 seconds</span>
+          </div>
+          <form id="connectionForm">
+            <div class="form-grid">
+              <div class="field field-wide">
+                <label for="channelId">ThingSpeak channel ID</label>
+                <input id="channelId" name="channelId" type="text" inputmode="numeric" pattern="[0-9]+" placeholder="Find this on your channel's Overview page" required>
+              </div>
+            </div>
+            <div class="actions">
+              <button class="primary" id="connectButton" type="submit">View channel</button>
+              <button class="secondary" id="disconnectButton" type="button" hidden>Stop updates</button>
+              <button class="secondary" id="notificationButton" type="button">Enable browser alerts</button>
+            </div>
+            <div class="form-message" id="formMessage" aria-live="polite">Create a public ThingSpeak channel, then enter its channel ID here.</div>
+          </form>
+          <p class="security-note">This page reads a public channel using ThingSpeak's read-only feeds API. Browser notifications require permission and only work while this page is open. For private channels, a read API key must be entered and should not be embedded in a public page.</p>
+          <p class="share-hint">Any listed condition triggers its tier; the strongest matching tier wins. As written, light above 50% is a Tier 3 Critical condition.</p>
+          <p class="share-hint">To share this dashboard, host this static page and use its URL with <code>?channel=YOUR_CHANNEL_ID</code>. Anyone with the link can view a public channel.</p>
+        </article>
+
+        <article class="feed">
+          <div class="section-heading">
+            <h2>Latest ThingSpeak entry</h2>
+            <span class="section-hint" id="messageCount">Waiting</span>
+          </div>
+          <div class="feed-list" id="feedList">
+            <div class="feed-empty">Enter the channel ID to load its latest entry.</div>
+          </div>
+        </article>
+      </section>
+    </main>
+
+    <footer>
+      Light is displayed as a normalized ADC percentage, not calibrated lux. ThingSpeak free channels allow one update every 15 seconds.
+    </footer>
+  </div>
+
+  <script>
+    const form = document.getElementById("connectionForm");
+    const connectButton = document.getElementById("connectButton");
+    const disconnectButton = document.getElementById("disconnectButton");
+    const notificationButton = document.getElementById("notificationButton");
+    const connectionPill = document.getElementById("connectionPill");
+    const connectionText = document.getElementById("connectionText");
+    const formMessage = document.getElementById("formMessage");
+    const feedList = document.getElementById("feedList");
+    const alertPanel = document.getElementById("alertPanel");
+    const alertTitle = document.getElementById("alertTitle");
+    const alertText = document.getElementById("alertText");
+    const fields = {
+      temperature: document.getElementById("temperature"),
+      humidity: document.getElementById("humidity"),
+      lightPercent: document.getElementById("lightPercent"),
+      lightStatus: document.getElementById("lightStatus"),
+      lightMeter: document.getElementById("lightMeter"),
+      temperatureState: document.getElementById("temperatureState"),
+      humidityState: document.getElementById("humidityState"),
+      updatedAt: document.getElementById("updatedAt"),
+      messageCount: document.getElementById("messageCount")
+    };
+    const historyCharts = [
+      { canvas: document.getElementById("temperatureChart"), field: "field1", color: "#b7e4a2", suffix: " °C", latest: document.getElementById("historyTemperature") },
+      { canvas: document.getElementById("humidityChart"), field: "field2", color: "#83c7d8", suffix: " %", latest: document.getElementById("historyHumidity") },
+      { canvas: document.getElementById("lightChart"), field: "field3", color: "#f2c879", suffix: " %", latest: document.getElementById("historyLight") }
+    ];
+
+    let pollTimer = null;
+    let activeChannelId = "";
+    let lastEntryId = null;
+    let previousAlertSignature = "";
+
+    function setConnectionState(state, text) {
+      connectionPill.dataset.state = state;
+      connectionText.textContent = text;
+    }
+
+    function setMessage(text, kind) {
+      formMessage.textContent = text;
+      formMessage.dataset.kind = kind || "";
+    }
+
+    function parseField(value) {
+      if (value === null || value === undefined || value === "") return null;
+      const number = Number(value);
+      return Number.isFinite(number) ? number : null;
+    }
+
+    function updateFeed(entry) {
+      const rows = [
+        ["Entry", entry.entry_id || "—"],
+        ["Recorded", entry.created_at ? new Date(entry.created_at).toLocaleString() : "—"],
+        ["LDR ADC", entry.field4 || "—"],
+        ["Light category code", entry.field5 || "—"]
+      ];
+      feedList.replaceChildren();
+      for (const [key, value] of rows) {
+        const row = document.createElement("div");
+        row.className = "feed-item";
+        const label = document.createElement("span");
+        label.className = "feed-key";
+        label.textContent = key;
+        const content = document.createElement("span");
+        content.className = "feed-value";
+        content.textContent = value;
+        row.append(label, content);
+        feedList.append(row);
+      }
+    }
+
+    function drawHistory(feeds) {
+      for (const chart of historyCharts) {
+        const samples = feeds
+          .map((feed) => parseField(feed[chart.field]))
+          .filter((value) => value !== null);
+        chart.latest.textContent = samples.length
+          ? `${samples[samples.length - 1]}${chart.suffix}`
+          : "No data";
+
+        const canvas = chart.canvas;
+        const rect = canvas.getBoundingClientRect();
+        const ratio = window.devicePixelRatio || 1;
+        const width = Math.max(1, Math.round(rect.width * ratio));
+        const height = Math.max(1, Math.round(rect.height * ratio));
+        if (canvas.width !== width || canvas.height !== height) {
+          canvas.width = width;
+          canvas.height = height;
+        }
+
+        const context = canvas.getContext("2d");
+        context.clearRect(0, 0, width, height);
+        const padding = 8 * ratio;
+        const plotWidth = width - padding * 2;
+        const plotHeight = height - padding * 2;
+        context.strokeStyle = "rgba(158, 175, 163, .16)";
+        context.lineWidth = ratio;
+        for (let row = 0; row <= 2; row++) {
+          const y = padding + (plotHeight * row) / 2;
+          context.beginPath();
+          context.moveTo(padding, y);
+          context.lineTo(width - padding, y);
+          context.stroke();
+        }
+        if (samples.length < 2) continue;
+
+        let min = Math.min(...samples);
+        let max = Math.max(...samples);
+        if (min === max) {
+          min -= 1;
+          max += 1;
+        }
+        context.strokeStyle = chart.color;
+        context.lineWidth = 2 * ratio;
+        context.lineJoin = "round";
+        context.lineCap = "round";
+        context.beginPath();
+        samples.forEach((value, index) => {
+          const x = padding + (plotWidth * index) / (samples.length - 1);
+          const y = padding + plotHeight - ((value - min) / (max - min)) * plotHeight;
+          if (index === 0) context.moveTo(x, y);
+          else context.lineTo(x, y);
+        });
+        context.stroke();
+      }
+      document.getElementById("historyHint").textContent =
+        `Last ${feeds.length} channel update${feeds.length === 1 ? "" : "s"}`;
+    }
+
+    function evaluateAlertTier(readings) {
+      const criticalReasons = [];
+      if (readings.temperature !== null && readings.temperature > 34) {
+        criticalReasons.push(`temperature > 34 °C (${readings.temperature.toFixed(1)} °C)`);
+      }
+      if (readings.humidity !== null && readings.humidity < 40) {
+        criticalReasons.push(`humidity < 40% (${readings.humidity.toFixed(1)}%)`);
+      }
+      if (readings.light !== null && readings.light > 50) {
+        criticalReasons.push(`light > 50% (${readings.light}%)`);
+      }
+      if (criticalReasons.length) {
+        return {
+          level: 3,
+          title: "Tier 3: Critical",
+          state: "critical",
+          reasons: criticalReasons,
+          action: "Deploy 40–50% shade nets immediately. Use gentle overhead misting or syringing to raise local RH and dislodge mites. Reduce ventilation if external air is extremely dry."
+        };
+      }
+
+      const alertReasons = [];
+      if (readings.temperature !== null && readings.temperature >= 30 && readings.temperature <= 34) {
+        alertReasons.push(`temperature 30–34 °C (${readings.temperature.toFixed(1)} °C)`);
+      }
+      if (readings.humidity !== null && readings.humidity < 50) {
+        alertReasons.push(`humidity < 50% (${readings.humidity.toFixed(1)}%)`);
+      }
+      if (readings.light !== null && readings.light > 60) {
+        alertReasons.push(`light > 60% (${readings.light}%)`);
+      }
+      if (alertReasons.length) {
+        return {
+          level: 2,
+          title: "Tier 2: Alert",
+          state: "alert",
+          reasons: alertReasons,
+          action: "Deploy 30–40% shade nets to reduce leaf temperature by 3–5 °C. Increase ventilation to lower internal heat, but monitor RH to avoid excessive drying."
+        };
+      }
+
+      const watchReasons = [];
+      if (readings.temperature !== null && readings.temperature >= 27 && readings.temperature <= 30) {
+        watchReasons.push(`temperature 27–30 °C (${readings.temperature.toFixed(1)} °C)`);
+      }
+      if (readings.humidity !== null && readings.humidity >= 50 && readings.humidity <= 60) {
+        watchReasons.push(`humidity 50–60% (${readings.humidity.toFixed(1)}%)`);
+      }
+      if (readings.light !== null && readings.light > 70) {
+        watchReasons.push(`light > 70% (${readings.light}%)`);
+      }
+      if (watchReasons.length) {
+        return {
+          level: 1,
+          title: "Tier 1: Watch",
+          state: "watch",
+          reasons: watchReasons,
+          action: "Increase scouting: inspect middle canopy leaves. Ensure adequate soil moisture to prevent plant stress. No shade net adjustment is required unless light exceeds 80%."
+        };
+      }
+      return {
+        level: 0,
+        title: "No tier triggered",
+        state: "ok",
+        reasons: [],
+        action: "No listed condition currently matches."
+      };
+    }
+
+    function checkAlerts(readings) {
+      const alert = evaluateAlertTier(readings);
+      alertPanel.dataset.state = alert.state;
+      alertTitle.textContent = alert.title;
+      alertText.textContent = alert.level
+        ? `${alert.reasons.join("; ")}. Recommended action: ${alert.action}`
+        : alert.action;
+
+      const signature = alert.level ? String(alert.level) : "";
+      if (signature && signature !== previousAlertSignature &&
+          "Notification" in window && Notification.permission === "granted") {
+        new Notification(alert.title, { body: `${alert.reasons.join("; ")}. ${alert.action}` });
+      }
+      previousAlertSignature = signature;
+    }
+
+    function updateReadings(entry) {
+      const readings = {
+        temperature: parseField(entry.field1),
+        humidity: parseField(entry.field2),
+        light: parseField(entry.field3),
+        adc: parseField(entry.field4),
+        statusCode: parseField(entry.field5)
+      };
+      const lightStatus = ["DARK", "SHADED", "INDOOR", "BRIGHT", "SUNNY", "ERROR"][readings.statusCode];
+      fields.temperature.textContent = readings.temperature === null ? "--.-" : readings.temperature.toFixed(1);
+      fields.humidity.textContent = readings.humidity === null ? "--.-" : readings.humidity.toFixed(1);
+      fields.temperatureState.textContent = readings.temperature === null ? "No reading" : "Live";
+      fields.humidityState.textContent = readings.humidity === null ? "No reading" : "Live";
+      fields.lightPercent.textContent = readings.light === null ? "--" : String(Math.round(readings.light));
+      fields.lightStatus.textContent = lightStatus || (readings.light === null ? "No reading" : "Unknown");
+      fields.lightMeter.style.width = readings.light !== null && readings.light >= 0 && readings.light <= 100
+        ? `${readings.light}%` : "0%";
+      fields.updatedAt.textContent = `Last update · ${entry.created_at ? new Date(entry.created_at).toLocaleTimeString() : "time unavailable"}`;
+      checkAlerts(readings);
+    }
+
+    async function pollChannel() {
+      if (!activeChannelId) return;
+      try {
+        const response = await fetch(
+          `https://api.thingspeak.com/channels/${encodeURIComponent(activeChannelId)}/feeds.json?results=20`,
+          { cache: "no-store" }
+        );
+        if (!response.ok) throw new Error(`ThingSpeak returned HTTP ${response.status}`);
+        const result = await response.json();
+        const feeds = result && Array.isArray(result.feeds) ? result.feeds : [];
+        const entry = feeds[feeds.length - 1];
+        if (!result || !result.channel ||
+            String(result.channel.id) !== activeChannelId ||
+            !entry || !entry.created_at) {
+          throw new Error("Channel returned no feed entry. Check the channel ID and make sure the device has published.");
+        }
+        setConnectionState("connected", "Channel online");
+        connectButton.disabled = true;
+        disconnectButton.hidden = false;
+        fields.messageCount.textContent = `Entry ${entry.entry_id || "received"}`;
+        updateReadings(entry);
+        updateFeed(entry);
+        drawHistory(feeds);
+        setMessage(`Reading channel ${activeChannelId}; refreshing every 15 seconds.`, "success");
+        if (String(entry.entry_id) !== String(lastEntryId)) {
+          lastEntryId = entry.entry_id;
+        }
+      } catch (error) {
+        setConnectionState("error", "Read failed");
+        setMessage(`${error.message} Check that the channel is public and the ID is correct.`, "error");
+      }
+    }
+
+    function stopUpdates(showMessage) {
+      if (pollTimer !== null) {
+        clearInterval(pollTimer);
+        pollTimer = null;
+      }
+      activeChannelId = "";
+      setConnectionState("disconnected", "Not connected");
+      connectButton.disabled = false;
+      disconnectButton.hidden = true;
+      if (showMessage) setMessage("Stopped reading the ThingSpeak channel.", "");
+    }
+
+    form.addEventListener("submit", async (event) => {
+      event.preventDefault();
+      const channelId = document.getElementById("channelId").value.trim();
+      if (!/^\d+$/.test(channelId)) {
+        setMessage("Enter the numeric channel ID shown in ThingSpeak.", "error");
+        return;
+      }
+
+      stopUpdates(false);
+      activeChannelId = channelId;
+      lastEntryId = null;
+      setConnectionState("connecting", "Loading channel");
+      connectButton.disabled = true;
+      disconnectButton.hidden = false;
+      setMessage("Loading the latest reading from ThingSpeak…", "");
+      await pollChannel();
+      if (activeChannelId) pollTimer = setInterval(pollChannel, 15000);
+    });
+
+    disconnectButton.addEventListener("click", () => stopUpdates(true));
+    notificationButton.addEventListener("click", async () => {
+      if (!("Notification" in window)) {
+        setMessage("This browser does not support desktop notifications. In-dashboard alerts will still work.", "error");
+        return;
+      }
+      const permission = await Notification.requestPermission();
+      setMessage(permission === "granted"
+        ? "Browser notifications enabled."
+        : "Notifications were not enabled. In-dashboard alerts will still work.", permission === "granted" ? "success" : "error");
+    });
+    const sharedChannelId = new URLSearchParams(window.location.search).get("channel");
+    if (sharedChannelId && /^\d+$/.test(sharedChannelId)) {
+      document.getElementById("channelId").value = sharedChannelId;
+      form.requestSubmit();
+    }
+  </script>
+</body>
+</html>
