@@ -270,13 +270,15 @@ uint8_t ThingSpeak_Publish(const char *write_api_key,
                            uint8_t temperature_valid, float temperature,
                            uint8_t humidity_valid, float humidity,
                            uint8_t light_valid, uint8_t light_percent,
-                           uint16_t light_adc, uint8_t light_status)
+                           uint16_t light_adc, uint8_t light_status,
+                           uint8_t alert_tier)
 {
     char temperature_value[16];
     char humidity_value[16];
     char light_value[8];
     char adc_value[8];
     char status_value[4];
+    char tier_value[4];
     char command[64];
     char *body;
     char *http;
@@ -316,14 +318,15 @@ uint8_t ThingSpeak_Publish(const char *write_api_key,
         adc_value[0] = '\0';
     }
     snprintf(status_value, sizeof(status_value), "%u", (unsigned)LightStatusCode(light_status));
+    snprintf(tier_value, sizeof(tier_value), "%u", (unsigned)(alert_tier <= 3U ? alert_tier : 0U));
 
     request_length = snprintf(http_request, sizeof(http_request),
-        "GET /update?api_key=%s&field1=%s&field2=%s&field3=%s&field4=%s&field5=%s HTTP/1.1\r\n"
+        "GET /update?api_key=%s&field1=%s&field2=%s&field3=%s&field4=%s&field5=%s&field6=%s HTTP/1.1\r\n"
         "Host: " THINGSPEAK_HOST "\r\n"
         "Connection: close\r\n"
         "User-Agent: STM32L073\r\n\r\n",
         write_api_key, temperature_value, humidity_value,
-        light_value, adc_value, status_value);
+        light_value, adc_value, status_value, tier_value);
     if (request_length < 0 || (size_t)request_length >= sizeof(http_request)) {
         snprintf(last_result, sizeof(last_result), "HTTP request too large");
         return 0;
@@ -332,9 +335,9 @@ uint8_t ThingSpeak_Publish(const char *write_api_key,
     {
         char debug_line[128];
         int debug_length = snprintf(debug_line, sizeof(debug_line),
-                                    "[ThingSpeak] Sending fields: f1=%s f2=%s f3=%s f4=%s f5=%s\r\n",
+                                    "[ThingSpeak] Sending fields: f1=%s f2=%s f3=%s f4=%s f5=%s f6=%s\r\n",
                                     temperature_value, humidity_value, light_value,
-                                    adc_value, status_value);
+                                    adc_value, status_value, tier_value);
         if (debug_length > 0) {
             HAL_UART_Transmit(&huart2, (uint8_t *)debug_line,
                              (uint16_t)((size_t)debug_length < sizeof(debug_line) ?

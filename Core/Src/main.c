@@ -373,7 +373,7 @@ int main(void)
                                          sensors.dht_valid, sensors.dht_temp,
                                          sensors.dht_valid, sensors.dht_hum,
                                          light_valid, light_percent, light_adc,
-                                         light_status);
+                                         light_status, previous_alert_tier);
          t_publish = HAL_GetTick();
          if (published) {
              snprintf(msg, sizeof(msg), "ThingSpeak update accepted (%s)\r\n",

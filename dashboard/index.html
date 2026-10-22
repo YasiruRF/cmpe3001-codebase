@@ -3,322 +3,434 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta name="theme-color" content="#101915">
+  <meta name="color-scheme" content="dark light">
+  <meta name="theme-color" content="#0f1512" media="(prefers-color-scheme: dark)">
+  <meta name="theme-color" content="#f4f6f2" media="(prefers-color-scheme: light)">
   <title>Fieldnote | Sensor Dashboard</title>
   <style>
+    /* ---------- Design tokens ----------
+       Spacing: 4px base (4, 8, 12, 16, 24, 32, 48).
+       Radius: 12px surfaces, 8px controls, pill for status badges only.
+       One accent (green). Tier colors carry meaning only. */
     :root {
       color-scheme: dark;
-      --bg: #101915;
-      --panel: #18231e;
-      --panel-raised: #1d2a24;
-      --border: #2a3931;
-      --text: #eef4ed;
-      --muted: #9eafa3;
-      --green: #b7e4a2;
-      --green-dark: #263b2c;
-      --amber: #f2c879;
-      --red: #f08c83;
-      --radius: 18px;
+      --bg: #0f1512;
+      --surface: #151d19;
+      --surface-2: #1b2621;
+      --border: #26342d;
+      --border-strong: #35473d;
+      --text: #e9f0ea;
+      --muted: #96a89c;
+      --faint: #7d8f83;
+      --accent: #a9d98f;
+      --accent-ink: #12200f;
+      --accent-hover: #bde6a6;
+      --focus: #a9d98f;
+
+      --data-temp: #a9d98f;
+      --data-hum: #6fc1d6;
+      --data-light: #e7bf6a;
+
+      --ok: #a9d98f;
+      --ok-bg: rgba(169, 217, 143, .08);
+      --watch: #dcc86a;
+      --watch-bg: rgba(220, 200, 106, .09);
+      --alert: #f0a35e;
+      --alert-bg: rgba(240, 163, 94, .10);
+      --critical: #f2877d;
+      --critical-bg: rgba(242, 135, 125, .11);
+
+      --r-surface: 12px;
+      --r-control: 8px;
+      --font: "Segoe UI Variable Text", "Segoe UI", system-ui, -apple-system, "Helvetica Neue", Arial, sans-serif;
+      --mono: ui-monospace, "Cascadia Mono", "SF Mono", Consolas, monospace;
+    }
+
+    @media (prefers-color-scheme: light) {
+      :root {
+        color-scheme: light;
+        --bg: #f4f6f2;
+        --surface: #ffffff;
+        --surface-2: #f0f3ee;
+        --border: #dbe2d8;
+        --border-strong: #c3cdbf;
+        --text: #17211b;
+        --muted: #55665b;
+        --faint: #66776c;
+        --accent: #2f6b2a;
+        --accent-ink: #ffffff;
+        --accent-hover: #265821;
+        --focus: #2f6b2a;
+
+        --data-temp: #2f6b2a;
+        --data-hum: #1f6f8b;
+        --data-light: #9a6a0c;
+
+        --ok: #2f6b2a;
+        --ok-bg: rgba(47, 107, 42, .07);
+        --watch: #7a6a0b;
+        --watch-bg: rgba(160, 140, 20, .10);
+        --alert: #a5560f;
+        --alert-bg: rgba(200, 110, 25, .10);
+        --critical: #b3342a;
+        --critical-bg: rgba(190, 55, 45, .09);
+      }
     }
 
     * { box-sizing: border-box; }
+    html { -webkit-text-size-adjust: 100%; }
 
     body {
       margin: 0;
       min-width: 280px;
-      min-height: 100vh;
-      background:
-        radial-gradient(ellipse at 12% 0%, rgba(106, 150, 107, .12), transparent 34rem),
-        var(--bg);
+      min-height: 100dvh;
+      background: var(--bg);
       color: var(--text);
-      font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-      letter-spacing: -.01em;
+      font-family: var(--font);
+      font-size: 14px;
+      line-height: 1.5;
+      font-variant-numeric: tabular-nums;
     }
 
     button, input { font: inherit; }
     button { cursor: pointer; }
+    :focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
 
-    .shell { width: min(1120px, calc(100% - 40px)); margin: 0 auto; }
+    .shell { width: min(1120px, calc(100% - 32px)); margin: 0 auto; }
 
-    header {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      min-height: 86px;
-      border-bottom: 1px solid rgba(158, 175, 163, .14);
+    /* ---------- Top bar ---------- */
+    .topbar {
+      position: sticky;
+      top: 0;
+      z-index: 10;
+      background: color-mix(in srgb, var(--bg) 92%, transparent);
+      border-bottom: 1px solid var(--border);
+      backdrop-filter: blur(8px);
     }
-
-    .brand { display: flex; align-items: center; gap: 12px; }
+    .topbar-inner { display: flex; align-items: center; justify-content: space-between; gap: 16px; min-height: 64px; }
+    .brand { display: flex; align-items: center; gap: 12px; min-width: 0; }
     .brand-mark {
       display: grid;
-      width: 38px;
-      height: 38px;
+      flex: none;
+      width: 32px;
+      height: 32px;
       place-items: center;
-      border: 1px solid #46664d;
-      border-radius: 12px;
-      background: var(--green-dark);
-      color: var(--green);
-      font-size: 19px;
+      border: 1px solid var(--border-strong);
+      border-radius: var(--r-control);
+      background: var(--surface-2);
+      color: var(--accent);
+      font-size: 16px;
+      font-weight: 700;
     }
-    .brand-name { font-size: 15px; font-weight: 700; letter-spacing: .04em; }
-    .brand-caption { margin-top: 2px; color: var(--muted); font-size: 11px; }
+    .brand-name { font-size: 15px; font-weight: 700; letter-spacing: .06em; }
+    .brand-caption { color: var(--muted); font-size: 12px; }
+    .topbar-status { display: flex; align-items: center; gap: 12px; }
+    .updated { color: var(--muted); font-size: 12px; white-space: nowrap; }
 
     .connection-pill {
       display: inline-flex;
       align-items: center;
       gap: 8px;
-      padding: 8px 12px;
-      border: 1px solid var(--border);
+      padding: 4px 12px;
+      border: 1px solid var(--border-strong);
       border-radius: 999px;
       color: var(--muted);
       font-size: 12px;
+      font-weight: 600;
+      white-space: nowrap;
     }
-    .connection-dot {
-      width: 8px;
-      height: 8px;
-      border-radius: 50%;
-      background: #748078;
-    }
-    .connection-pill[data-state="connected"] { border-color: #476b4d; color: var(--green); }
-    .connection-pill[data-state="connected"] .connection-dot { background: var(--green); box-shadow: 0 0 12px #b7e4a266; }
-    .connection-pill[data-state="connecting"] .connection-dot { background: var(--amber); }
-    .connection-pill[data-state="error"] .connection-dot { background: var(--red); }
+    .connection-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--faint); }
+    .connection-pill[data-state="connected"] { border-color: var(--ok); color: var(--ok); }
+    .connection-pill[data-state="connected"] .connection-dot { background: var(--ok); }
+    .connection-pill[data-state="connecting"] { color: var(--watch); border-color: var(--watch); }
+    .connection-pill[data-state="connecting"] .connection-dot { background: var(--watch); }
+    .connection-pill[data-state="error"] { color: var(--critical); border-color: var(--critical); }
+    .connection-pill[data-state="error"] .connection-dot { background: var(--critical); }
 
-    main { padding: 42px 0 52px; }
-    .intro { display: flex; justify-content: space-between; align-items: end; gap: 24px; margin-bottom: 28px; }
-    .eyebrow { color: var(--green); font-size: 11px; font-weight: 700; letter-spacing: .16em; text-transform: uppercase; }
-    h1 { margin: 9px 0 7px; font-size: clamp(28px, 4vw, 40px); line-height: 1.08; letter-spacing: -.045em; }
-    .intro p { max-width: 540px; margin: 0; color: var(--muted); font-size: 14px; line-height: 1.65; }
-    .updated { color: var(--muted); font-size: 12px; white-space: nowrap; }
+    main { padding: 24px 0 32px; display: grid; gap: 16px; }
 
-    .grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; }
-    .card, .settings, .feed {
-      border: 1px solid var(--border);
-      border-radius: var(--radius);
-      background: linear-gradient(145deg, rgba(29, 42, 36, .96), rgba(22, 32, 27, .96));
-    }
-    .card { min-height: 192px; padding: 21px; }
-    .card-top { display: flex; justify-content: space-between; align-items: center; }
-    .metric-label { color: var(--muted); font-size: 12px; font-weight: 600; letter-spacing: .03em; }
-    .metric-icon { color: #c3d8c5; font-size: 16px; }
-    .metric-value { margin-top: 23px; font-size: clamp(36px, 5vw, 52px); font-weight: 550; letter-spacing: -.06em; line-height: 1; }
-    .metric-value .unit { margin-left: 5px; color: var(--muted); font-size: 17px; letter-spacing: 0; }
-    .metric-foot { display: flex; justify-content: space-between; align-items: center; margin-top: 17px; color: var(--muted); font-size: 11px; }
-    .metric-foot strong { color: var(--text); font-weight: 600; }
+    /* ---------- Shared surface + controls ---------- */
+    .panel { border: 1px solid var(--border); border-radius: var(--r-surface); background: var(--surface); }
+    h1, h2 { margin: 0; }
+    h1 { font-size: 20px; font-weight: 650; letter-spacing: -.01em; }
+    h2 { font-size: 15px; font-weight: 650; }
+    .hint { color: var(--muted); font-size: 12px; }
 
-    .light-card { border-color: #485942; background: linear-gradient(145deg, #27372a, #1a271f); }
-    .light-card .metric-value { color: #e4f2d9; }
-    .meter { height: 5px; margin-top: 15px; overflow: hidden; border-radius: 10px; background: #405044; }
-    .meter-fill { width: 0; height: 100%; border-radius: inherit; background: var(--green); transition: width .35s ease; }
-
-    .lower-grid { display: grid; grid-template-columns: minmax(0, 1.35fr) minmax(290px, .85fr); gap: 14px; margin-top: 14px; }
-    .settings, .feed { padding: 22px; }
-    .section-heading { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 18px; }
-    h2 { margin: 0; font-size: 15px; font-weight: 650; letter-spacing: -.02em; }
-    .section-hint { color: var(--muted); font-size: 11px; }
-    .form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 13px; }
-    .field { display: flex; flex-direction: column; gap: 7px; min-width: 0; }
-    .field-wide { grid-column: 1 / -1; }
-    label { color: #c4d0c7; font-size: 11px; font-weight: 600; }
+    label { display: block; margin-bottom: 4px; color: var(--muted); font-size: 12px; font-weight: 600; }
     input {
       width: 100%;
-      min-height: 42px;
-      padding: 0 12px;
-      border: 1px solid #35463b;
-      border-radius: 10px;
-      outline: none;
-      background: #121b16;
-      color: var(--text);
-      font-size: 12px;
-    }
-    input:focus { border-color: #88b17d; box-shadow: 0 0 0 3px #88b17d20; }
-    input::placeholder { color: #6f8175; }
-    .actions { display: flex; align-items: center; gap: 10px; margin-top: 15px; }
-    .primary, .secondary {
       min-height: 40px;
-      padding: 0 15px;
-      border: 1px solid transparent;
-      border-radius: 10px;
-      font-size: 12px;
-      font-weight: 700;
+      padding: 0 12px;
+      border: 1px solid var(--border-strong);
+      border-radius: var(--r-control);
+      background: var(--bg);
+      color: var(--text);
+      font-size: 14px;
     }
-    .primary { background: var(--green); color: #172219; }
-    .primary:hover { background: #c9f0b8; }
-    .secondary { border-color: var(--border); background: transparent; color: var(--muted); }
-    .secondary:hover { color: var(--text); }
-    button:disabled { cursor: not-allowed; opacity: .6; }
-    .form-message { min-height: 16px; margin-top: 11px; color: var(--muted); font-size: 11px; line-height: 1.5; }
-    .form-message[data-kind="error"] { color: var(--red); }
-    .form-message[data-kind="success"] { color: var(--green); }
-    .security-note { margin: 13px 0 0; color: #829388; font-size: 10px; line-height: 1.55; }
+    input::placeholder { color: var(--faint); }
+    input:focus { border-color: var(--focus); outline: 2px solid color-mix(in srgb, var(--focus) 35%, transparent); outline-offset: 0; }
 
-    .feed-list { display: flex; flex-direction: column; gap: 11px; }
-    .feed-item { display: flex; justify-content: space-between; gap: 16px; padding-bottom: 11px; border-bottom: 1px solid rgba(158, 175, 163, .12); font-size: 11px; }
-    .feed-item:last-child { padding-bottom: 0; border-bottom: 0; }
-    .feed-key { color: var(--muted); }
-    .feed-value { color: var(--text); text-align: right; overflow-wrap: anywhere; }
-    .feed-empty { color: var(--muted); font-size: 12px; line-height: 1.6; }
+    .btn {
+      min-height: 40px;
+      padding: 0 16px;
+      border: 1px solid var(--border-strong);
+      border-radius: var(--r-control);
+      background: transparent;
+      color: var(--text);
+      font-size: 13px;
+      font-weight: 650;
+      white-space: nowrap;
+      transition: background-color .15s ease, border-color .15s ease, transform .1s ease;
+    }
+    .btn:hover { background: var(--surface-2); }
+    .btn:active { transform: translateY(1px); }
+    .btn-primary { border-color: transparent; background: var(--accent); color: var(--accent-ink); }
+    .btn-primary:hover { background: var(--accent-hover); }
+    .btn:disabled { cursor: not-allowed; opacity: .55; }
+    .btn[hidden] { display: none; }
+
+    /* ---------- Channel bar ---------- */
+    .channel { padding: 16px; }
+    .channel-head { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; margin-bottom: 12px; flex-wrap: wrap; }
+    .channel-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 12px; align-items: end; }
+    .channel-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+    .form-message { min-height: 20px; margin-top: 12px; color: var(--muted); font-size: 12px; }
+    .form-message[data-kind="error"] { color: var(--critical); }
+    .form-message[data-kind="success"] { color: var(--ok); }
+
+    /* ---------- Alert panel ---------- */
     .alert-panel {
-      margin-top: 14px;
-      padding: 18px 21px;
-      border: 1px solid var(--border);
-      border-radius: var(--radius);
-      background: var(--panel);
+      --tone: var(--faint);
+      --tone-bg: transparent;
+      padding: 16px 24px 24px 16px;
+      border-left: 4px solid var(--tone);
+      background: linear-gradient(var(--tone-bg), var(--tone-bg)), var(--surface);
     }
-    .alert-panel[data-state="alert"] { border-color: #76563b; background: #30261d; }
-    .alert-panel[data-state="ok"] { border-color: #3c6044; }
-    .alert-panel[data-state="watch"] { border-color: #68704a; background: #282b1e; }
-    .alert-panel[data-state="critical"] { border-color: #824b46; background: #321f20; }
-    .alert-title { font-size: 13px; font-weight: 700; }
-    .alert-text { margin-top: 5px; color: var(--muted); font-size: 12px; line-height: 1.6; }
-    .history {
-      margin-top: 14px;
-      padding: 22px;
-      border: 1px solid var(--border);
-      border-radius: var(--radius);
-      background: linear-gradient(145deg, rgba(29, 42, 36, .96), rgba(22, 32, 27, .96));
+    .alert-panel[data-state="ok"] { --tone: var(--ok); --tone-bg: var(--ok-bg); }
+    .alert-panel[data-state="watch"] { --tone: var(--watch); --tone-bg: var(--watch-bg); }
+    .alert-panel[data-state="alert"] { --tone: var(--alert); --tone-bg: var(--alert-bg); }
+    .alert-panel[data-state="critical"] { --tone: var(--critical); --tone-bg: var(--critical-bg); }
+    .alert-top { display: flex; align-items: center; justify-content: space-between; gap: 16px; flex-wrap: wrap; }
+    .alert-title { font-size: 18px; font-weight: 700; color: var(--tone); }
+    .alert-panel[data-state="waiting"] .alert-title { color: var(--text); }
+    .tier-scale { display: flex; gap: 4px; margin: 0; padding: 0; list-style: none; }
+    .tier-scale li {
+      min-width: 64px;
+      padding: 4px 8px;
+      border: 1px solid var(--border-strong);
+      border-radius: var(--r-control);
+      color: var(--faint);
+      font-size: 12px;
+      font-weight: 600;
+      text-align: center;
     }
-    .history-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
-    .history-card { min-width: 0; padding: 14px; border: 1px solid rgba(158, 175, 163, .12); border-radius: 13px; background: rgba(16, 25, 21, .55); }
-    .history-label { display: flex; justify-content: space-between; gap: 8px; color: var(--muted); font-size: 11px; font-weight: 650; }
-    .history-value { color: var(--text); font-size: 12px; font-weight: 700; }
-    .history-card canvas { display: block; width: 100%; height: 112px; margin-top: 9px; }
-    .share-hint { margin: 10px 0 0; color: #829388; font-size: 10px; line-height: 1.5; }
-    footer { padding: 20px 0 28px; border-top: 1px solid rgba(158, 175, 163, .14); color: #829388; font-size: 10px; line-height: 1.6; }
-    footer a { color: var(--green); text-decoration: none; }
-    footer a:hover { text-decoration: underline; }
+    .alert-panel[data-level="1"] .tier-scale li:nth-child(-n+1),
+    .alert-panel[data-level="2"] .tier-scale li:nth-child(-n+2),
+    .alert-panel[data-level="3"] .tier-scale li:nth-child(-n+3) {
+      border-color: var(--tone);
+      background: var(--tone);
+      color: var(--bg);
+    }
+    .alert-reasons { display: flex; flex-wrap: wrap; gap: 8px; margin: 12px 0 0; padding: 0; list-style: none; }
+    .alert-reasons:empty { display: none; }
+    .alert-reasons li {
+      padding: 4px 12px;
+      border: 1px solid color-mix(in srgb, var(--tone) 55%, transparent);
+      border-radius: 999px;
+      font-size: 12px;
+      font-weight: 600;
+    }
+    .alert-text { max-width: 75ch; margin: 12px 0 0; color: var(--muted); font-size: 14px; }
+    .alert-text strong { color: var(--text); font-weight: 650; }
 
-    @media (max-width: 760px) {
-      .shell { width: min(100% - 28px, 560px); }
-      header { min-height: 72px; }
-      main { padding-top: 32px; }
-      .intro { align-items: start; flex-direction: column; gap: 12px; margin-bottom: 20px; }
-      .grid { grid-template-columns: 1fr 1fr; }
-      .card { min-height: 170px; padding: 17px; }
-      .light-card { grid-column: 1 / -1; min-height: 162px; }
-      .history-grid { grid-template-columns: 1fr; }
-      .history-card canvas { height: 100px; }
-      .lower-grid { grid-template-columns: 1fr; }
-      .metric-value { margin-top: 18px; }
+    /* ---------- Readings ---------- */
+    .readings { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; }
+    .metric { padding: 16px 24px 24px 16px; }
+    .metric-label { color: var(--muted); font-size: 13px; font-weight: 600; }
+    .metric-value { display: flex; align-items: baseline; gap: 4px; margin-top: 12px; font-size: clamp(36px, 5vw, 48px); font-weight: 600; letter-spacing: -.03em; line-height: 1; }
+    .metric-value .unit { color: var(--muted); font-size: 18px; font-weight: 500; letter-spacing: 0; }
+    .metric[data-waiting="true"] .metric-value { color: var(--faint); }
+    .metric-foot { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-top: 16px; color: var(--muted); font-size: 12px; }
+    .badge { padding: 2px 8px; border: 1px solid var(--border-strong); border-radius: 999px; color: var(--text); font-size: 12px; font-weight: 600; white-space: nowrap; }
+    .meter { height: 4px; margin-top: 16px; overflow: hidden; border-radius: 4px; background: var(--border); }
+    .meter-fill { width: 0; height: 100%; border-radius: inherit; background: var(--data-light); transition: width .35s ease; }
+
+    /* ---------- Trends ---------- */
+    .trends { padding: 16px; }
+    .trends-head { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; margin-bottom: 16px; flex-wrap: wrap; }
+    .trend-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; }
+    .trend { min-width: 0; padding: 12px; border: 1px solid var(--border); border-radius: var(--r-control); background: var(--surface-2); }
+    .trend-label { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; color: var(--muted); font-size: 12px; font-weight: 600; }
+    .trend-value { color: var(--text); font-size: 14px; font-weight: 700; }
+    .trend canvas { display: block; width: 100%; height: 120px; margin-top: 8px; }
+
+    /* ---------- Lower row ---------- */
+    .lower { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 16px; align-items: start; }
+    .box { padding: 16px; }
+    .box-head { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; margin-bottom: 12px; }
+    .feed-list { display: grid; margin: 0; }
+    .feed-item { display: flex; justify-content: space-between; gap: 16px; padding: 8px 0; border-bottom: 1px solid var(--border); font-size: 13px; }
+    .feed-item:last-child { border-bottom: 0; padding-bottom: 0; }
+    .feed-key { color: var(--muted); }
+    .feed-value { margin: 0; font-family: var(--mono); font-size: 12px; text-align: right; overflow-wrap: anywhere; }
+    .feed-empty { color: var(--muted); font-size: 13px; }
+
+    details.about summary { cursor: pointer; font-size: 15px; font-weight: 650; }
+    details.about summary::marker { color: var(--muted); }
+    .about-body { display: grid; gap: 12px; margin-top: 12px; color: var(--muted); font-size: 13px; }
+    .about-body p { margin: 0; max-width: 70ch; }
+    code { padding: 1px 4px; border-radius: 4px; background: var(--surface-2); font-family: var(--mono); font-size: 12px; }
+
+    footer { padding: 16px 0 32px; border-top: 1px solid var(--border); color: var(--faint); font-size: 12px; }
+
+    /* ---------- Responsive ---------- */
+    @media (max-width: 900px) {
+      .readings, .trend-grid { grid-template-columns: 1fr; }
+      .lower { grid-template-columns: 1fr; }
+      .readings .metric { display: grid; grid-template-columns: 1fr auto; column-gap: 16px; align-items: end; }
+      .readings .metric .metric-label { grid-column: 1 / -1; }
+      .readings .metric .metric-value { margin-top: 4px; }
+      .readings .metric .metric-foot { margin-top: 0; flex-direction: column; align-items: flex-end; gap: 4px; }
+      .readings .metric .meter { grid-column: 1 / -1; margin-top: 12px; }
+      .readings .metric .meter + .metric-foot { grid-column: 1 / -1; flex-direction: row; justify-content: space-between; align-items: center; margin-top: 8px; }
     }
-    @media (max-width: 430px) {
-      .shell { width: calc(100% - 22px); }
-      .grid { gap: 9px; }
-      .card { padding: 14px; }
-      .settings, .feed { padding: 17px; }
-      .history { padding: 17px; }
-      .form-grid { grid-template-columns: 1fr; }
-      .field-wide { grid-column: auto; }
-      .connection-pill { padding: 7px 9px; font-size: 10px; }
+    @media (max-width: 640px) {
+      .topbar-inner { flex-wrap: wrap; padding: 8px 0; }
+      .brand-caption, .updated { display: none; }
+      .channel-row { grid-template-columns: 1fr; }
+      .channel-actions .btn { flex: 1 1 auto; }
+      .tier-scale { width: 100%; }
+      .tier-scale li { flex: 1; min-width: 0; }
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      * { transition: none !important; }
     }
   </style>
 </head>
 <body>
-  <div class="shell">
-    <header>
+  <header class="topbar">
+    <div class="shell topbar-inner">
       <div class="brand">
-        <div class="brand-mark" aria-hidden="true">⌁</div>
+        <div class="brand-mark" aria-hidden="true">F</div>
         <div>
           <div class="brand-name">FIELDNOTE</div>
           <div class="brand-caption">Connected environment monitor</div>
         </div>
       </div>
-      <div class="connection-pill" id="connectionPill" data-state="disconnected" role="status" aria-live="polite">
-        <span class="connection-dot" aria-hidden="true"></span>
-        <span id="connectionText">Not connected</span>
-      </div>
-    </header>
-
-    <main>
-      <section class="intro" aria-labelledby="pageTitle">
-        <div>
-          <div class="eyebrow">Live device feed</div>
-          <h1 id="pageTitle">Your environment,<br>at a glance.</h1>
-          <p>Live temperature, humidity, and light readings from your STM32 sensor node.</p>
-        </div>
+      <div class="topbar-status">
         <div class="updated" id="updatedAt">Waiting for first reading</div>
-      </section>
-
-      <section class="grid" aria-label="Current sensor readings">
-        <article class="card">
-          <div class="card-top"><div class="metric-label">TEMPERATURE</div><div class="metric-icon" aria-hidden="true">°</div></div>
-          <div class="metric-value"><span id="temperature">--.-</span><span class="unit">°C</span></div>
-          <div class="metric-foot"><span>Air temperature</span><strong id="temperatureState">Waiting</strong></div>
-        </article>
-
-        <article class="card">
-          <div class="card-top"><div class="metric-label">HUMIDITY</div><div class="metric-icon" aria-hidden="true">◌</div></div>
-          <div class="metric-value"><span id="humidity">--.-</span><span class="unit">%</span></div>
-          <div class="metric-foot"><span>Relative humidity</span><strong id="humidityState">Waiting</strong></div>
-        </article>
-
-        <article class="card light-card">
-          <div class="card-top"><div class="metric-label">LIGHT LEVEL</div><div class="metric-icon" aria-hidden="true">☼</div></div>
-          <div class="metric-value"><span id="lightPercent">--</span><span class="unit">%</span></div>
-          <div class="meter" aria-label="Relative light level"><div class="meter-fill" id="lightMeter"></div></div>
-          <div class="metric-foot"><span>Relative brightness · not calibrated lux</span><strong id="lightStatus">Waiting</strong></div>
-        </article>
-      </section>
-
-      <section class="alert-panel" id="alertPanel" data-state="waiting" aria-live="polite">
-        <div class="alert-title" id="alertTitle">Tier alerts are waiting for data</div>
-        <div class="alert-text" id="alertText">Connect to your public ThingSpeak channel to evaluate the scouting and plant-stress conditions.</div>
-      </section>
-
-      <section class="history" aria-labelledby="historyTitle">
-        <div class="section-heading">
-          <h2 id="historyTitle">Recent trends</h2>
-          <span class="section-hint" id="historyHint">Last 20 channel updates</span>
+        <div class="connection-pill" id="connectionPill" data-state="disconnected" role="status" aria-live="polite">
+          <span class="connection-dot" aria-hidden="true"></span>
+          <span id="connectionText">Not connected</span>
         </div>
-        <div class="history-grid">
-          <article class="history-card">
-            <div class="history-label"><span>Temperature</span><span class="history-value" id="historyTemperature">—</span></div>
+      </div>
+    </div>
+  </header>
+
+  <div class="shell">
+    <main>
+      <section aria-labelledby="pageTitle">
+        <h1 id="pageTitle">Canopy conditions</h1>
+        <p class="hint" style="margin:4px 0 0">Live temperature, humidity, and light readings from your STM32 sensor node.</p>
+      </section>
+
+      <section class="panel channel" aria-labelledby="channelTitle">
+        <div class="channel-head">
+          <h2 id="channelTitle">ThingSpeak channel</h2>
+          <span class="hint">Public channel, refreshes every 15 seconds</span>
+        </div>
+        <form id="connectionForm">
+          <div class="channel-row">
+            <div>
+              <label for="channelId">ThingSpeak channel ID</label>
+              <input id="channelId" name="channelId" type="text" inputmode="numeric" pattern="[0-9]+" placeholder="Find this on your channel's Overview page" required>
+            </div>
+            <div class="channel-actions">
+              <button class="btn btn-primary" id="connectButton" type="submit">View channel</button>
+              <button class="btn" id="disconnectButton" type="button" hidden>Stop updates</button>
+              <button class="btn" id="notificationButton" type="button">Enable browser alerts</button>
+            </div>
+          </div>
+          <div class="form-message" id="formMessage" aria-live="polite">Create a public ThingSpeak channel, then enter its channel ID here.</div>
+        </form>
+      </section>
+
+      <section class="panel alert-panel" id="alertPanel" data-state="waiting" data-level="0" aria-live="polite" aria-label="Alert status">
+        <div class="alert-top">
+          <div class="alert-title" id="alertTitle">Tier alerts are waiting for data</div>
+          <ol class="tier-scale" aria-hidden="true">
+            <li>Watch</li>
+            <li>Alert</li>
+            <li>Critical</li>
+          </ol>
+        </div>
+        <ul class="alert-reasons" id="alertReasons"></ul>
+        <p class="alert-text" id="alertText">Connect to your public ThingSpeak channel to evaluate the scouting and plant-stress conditions.</p>
+      </section>
+
+      <section class="readings" aria-label="Current sensor readings">
+        <article class="panel metric" data-waiting="true" id="temperatureCard">
+          <div class="metric-label">Temperature</div>
+          <div class="metric-value"><span id="temperature">--.-</span><span class="unit">°C</span></div>
+          <div class="metric-foot"><span>Air temperature</span><span class="badge" id="temperatureState">Waiting</span></div>
+        </article>
+
+        <article class="panel metric" data-waiting="true" id="humidityCard">
+          <div class="metric-label">Humidity</div>
+          <div class="metric-value"><span id="humidity">--.-</span><span class="unit">%</span></div>
+          <div class="metric-foot"><span>Relative humidity</span><span class="badge" id="humidityState">Waiting</span></div>
+        </article>
+
+        <article class="panel metric" data-waiting="true" id="lightCard">
+          <div class="metric-label">Light level</div>
+          <div class="metric-value"><span id="lightPercent">--</span><span class="unit">%</span></div>
+          <div class="meter" role="img" aria-label="Relative light level"><div class="meter-fill" id="lightMeter"></div></div>
+          <div class="metric-foot"><span>Relative, not calibrated lux</span><span class="badge" id="lightStatus">Waiting</span></div>
+        </article>
+      </section>
+
+      <section class="panel trends" aria-labelledby="historyTitle">
+        <div class="trends-head">
+          <h2 id="historyTitle">Recent trends</h2>
+          <span class="hint" id="historyHint">Last 20 channel updates</span>
+        </div>
+        <div class="trend-grid">
+          <article class="trend">
+            <div class="trend-label"><span>Temperature</span><span class="trend-value" id="historyTemperature">n/a</span></div>
             <canvas id="temperatureChart" role="img" aria-label="Recent temperature trend"></canvas>
           </article>
-          <article class="history-card">
-            <div class="history-label"><span>Humidity</span><span class="history-value" id="historyHumidity">—</span></div>
+          <article class="trend">
+            <div class="trend-label"><span>Humidity</span><span class="trend-value" id="historyHumidity">n/a</span></div>
             <canvas id="humidityChart" role="img" aria-label="Recent humidity trend"></canvas>
           </article>
-          <article class="history-card">
-            <div class="history-label"><span>Light</span><span class="history-value" id="historyLight">—</span></div>
+          <article class="trend">
+            <div class="trend-label"><span>Light</span><span class="trend-value" id="historyLight">n/a</span></div>
             <canvas id="lightChart" role="img" aria-label="Recent light trend"></canvas>
           </article>
         </div>
       </section>
 
-      <section class="lower-grid" aria-label="Connection and message information">
-        <article class="settings">
-          <div class="section-heading">
-            <h2>ThingSpeak channel</h2>
-            <span class="section-hint">Public channel · updates every 15 seconds</span>
-          </div>
-          <form id="connectionForm">
-            <div class="form-grid">
-              <div class="field field-wide">
-                <label for="channelId">ThingSpeak channel ID</label>
-                <input id="channelId" name="channelId" type="text" inputmode="numeric" pattern="[0-9]+" placeholder="Find this on your channel's Overview page" required>
-              </div>
-            </div>
-            <div class="actions">
-              <button class="primary" id="connectButton" type="submit">View channel</button>
-              <button class="secondary" id="disconnectButton" type="button" hidden>Stop updates</button>
-              <button class="secondary" id="notificationButton" type="button">Enable browser alerts</button>
-            </div>
-            <div class="form-message" id="formMessage" aria-live="polite">Create a public ThingSpeak channel, then enter its channel ID here.</div>
-          </form>
-          <p class="security-note">This page reads a public channel using ThingSpeak's read-only feeds API. Browser notifications require permission and only work while this page is open. For private channels, a read API key must be entered and should not be embedded in a public page.</p>
-          <p class="share-hint">Any listed condition triggers its tier; the strongest matching tier wins. As written, light above 50% is a Tier 3 Critical condition.</p>
-          <p class="share-hint">To share this dashboard, host this static page and use its URL with <code>?channel=YOUR_CHANNEL_ID</code>. Anyone with the link can view a public channel.</p>
-        </article>
-
-        <article class="feed">
-          <div class="section-heading">
+      <section class="lower" aria-label="Latest entry and notes">
+        <article class="panel box">
+          <div class="box-head">
             <h2>Latest ThingSpeak entry</h2>
-            <span class="section-hint" id="messageCount">Waiting</span>
+            <span class="hint" id="messageCount">Waiting</span>
           </div>
           <div class="feed-list" id="feedList">
             <div class="feed-empty">Enter the channel ID to load its latest entry.</div>
           </div>
+        </article>
+
+        <article class="panel box">
+          <details class="about">
+            <summary>About this feed</summary>
+            <div class="about-body">
+              <p>This page reads a public channel using ThingSpeak's read-only feeds API. Browser notifications require permission and only work while this page is open. For private channels, a read API key must be entered and should not be embedded in a public page.</p>
+              <p>The sensor node evaluates the alert tier and publishes it as field6. Any listed condition triggers its tier; the strongest matching tier wins. As written, light above 50% is a Tier 3 Critical condition.</p>
+              <p>To share this dashboard, host this static page and use its URL with <code>?channel=YOUR_CHANNEL_ID</code>. Anyone with the link can view a public channel.</p>
+            </div>
+          </details>
         </article>
       </section>
     </main>
@@ -340,6 +452,7 @@
     const alertPanel = document.getElementById("alertPanel");
     const alertTitle = document.getElementById("alertTitle");
     const alertText = document.getElementById("alertText");
+    const alertReasons = document.getElementById("alertReasons");
     const fields = {
       temperature: document.getElementById("temperature"),
       humidity: document.getElementById("humidity"),
@@ -352,15 +465,16 @@
       messageCount: document.getElementById("messageCount")
     };
     const historyCharts = [
-      { canvas: document.getElementById("temperatureChart"), field: "field1", color: "#b7e4a2", suffix: " °C", latest: document.getElementById("historyTemperature") },
-      { canvas: document.getElementById("humidityChart"), field: "field2", color: "#83c7d8", suffix: " %", latest: document.getElementById("historyHumidity") },
-      { canvas: document.getElementById("lightChart"), field: "field3", color: "#f2c879", suffix: " %", latest: document.getElementById("historyLight") }
+      { canvas: document.getElementById("temperatureChart"), field: "field1", colorVar: "--data-temp", suffix: " °C", digits: 1, latest: document.getElementById("historyTemperature") },
+      { canvas: document.getElementById("humidityChart"), field: "field2", colorVar: "--data-hum", suffix: " %", digits: 1, latest: document.getElementById("historyHumidity") },
+      { canvas: document.getElementById("lightChart"), field: "field3", colorVar: "--data-light", suffix: " %", digits: 0, latest: document.getElementById("historyLight") }
     ];
 
     let pollTimer = null;
     let activeChannelId = "";
     let lastEntryId = null;
     let previousAlertSignature = "";
+    let lastFeeds = [];
 
     function setConnectionState(state, text) {
       connectionPill.dataset.state = state;
@@ -380,10 +494,10 @@
 
     function updateFeed(entry) {
       const rows = [
-        ["Entry", entry.entry_id || "—"],
-        ["Recorded", entry.created_at ? new Date(entry.created_at).toLocaleString() : "—"],
-        ["LDR ADC", entry.field4 || "—"],
-        ["Light category code", entry.field5 || "—"]
+        ["Entry", entry.entry_id || "n/a"],
+        ["Recorded", entry.created_at ? new Date(entry.created_at).toLocaleString() : "n/a"],
+        ["LDR ADC", entry.field4 || "n/a"],
+        ["Light category code", entry.field5 || "n/a"]
       ];
       feedList.replaceChildren();
       for (const [key, value] of rows) {
@@ -400,13 +514,21 @@
       }
     }
 
+    function cssVar(name) {
+      return getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+    }
+
     function drawHistory(feeds) {
+      lastFeeds = feeds;
+      const muted = cssVar("--muted");
+      const grid = cssVar("--border-strong");
+      const fontFamily = getComputedStyle(document.body).fontFamily;
       for (const chart of historyCharts) {
         const samples = feeds
           .map((feed) => parseField(feed[chart.field]))
           .filter((value) => value !== null);
         chart.latest.textContent = samples.length
-          ? `${samples[samples.length - 1]}${chart.suffix}`
+          ? `${samples[samples.length - 1].toFixed(chart.digits)}${chart.suffix}`
           : "No data";
 
         const canvas = chart.canvas;
@@ -421,19 +543,35 @@
 
         const context = canvas.getContext("2d");
         context.clearRect(0, 0, width, height);
-        const padding = 8 * ratio;
-        const plotWidth = width - padding * 2;
-        const plotHeight = height - padding * 2;
-        context.strokeStyle = "rgba(158, 175, 163, .16)";
+        const padTop = 8 * ratio;
+        const padBottom = 8 * ratio;
+        const padLeft = 40 * ratio;
+        const padRight = 8 * ratio;
+        const plotWidth = width - padLeft - padRight;
+        const plotHeight = height - padTop - padBottom;
+        context.font = `${11 * ratio}px ${fontFamily}`;
+        context.textBaseline = "middle";
+
+        context.strokeStyle = grid;
+        context.globalAlpha = .45;
         context.lineWidth = ratio;
+        context.setLineDash([3 * ratio, 4 * ratio]);
         for (let row = 0; row <= 2; row++) {
-          const y = padding + (plotHeight * row) / 2;
+          const y = padTop + (plotHeight * row) / 2;
           context.beginPath();
-          context.moveTo(padding, y);
-          context.lineTo(width - padding, y);
+          context.moveTo(padLeft, y);
+          context.lineTo(width - padRight, y);
           context.stroke();
         }
-        if (samples.length < 2) continue;
+        context.setLineDash([]);
+        context.globalAlpha = 1;
+
+        if (samples.length < 2) {
+          context.fillStyle = muted;
+          context.textAlign = "center";
+          context.fillText(samples.length ? "Waiting for more readings" : "Waiting for data", width / 2, height / 2);
+          continue;
+        }
 
         let min = Math.min(...samples);
         let max = Math.max(...samples);
@@ -441,99 +579,85 @@
           min -= 1;
           max += 1;
         }
-        context.strokeStyle = chart.color;
+        context.fillStyle = muted;
+        context.textAlign = "left";
+        context.fillText(max.toFixed(chart.digits), 0, padTop + 2 * ratio);
+        context.fillText(min.toFixed(chart.digits), 0, height - padBottom - 2 * ratio);
+
+        const color = cssVar(chart.colorVar);
+        const points = samples.map((value, index) => [
+          padLeft + (plotWidth * index) / (samples.length - 1),
+          padTop + plotHeight - ((value - min) / (max - min)) * plotHeight
+        ]);
+
+        context.beginPath();
+        points.forEach(([x, y], index) => (index === 0 ? context.moveTo(x, y) : context.lineTo(x, y)));
+        context.lineTo(points[points.length - 1][0], height - padBottom);
+        context.lineTo(points[0][0], height - padBottom);
+        context.closePath();
+        context.fillStyle = color;
+        context.globalAlpha = .12;
+        context.fill();
+        context.globalAlpha = 1;
+
+        context.strokeStyle = color;
         context.lineWidth = 2 * ratio;
         context.lineJoin = "round";
         context.lineCap = "round";
         context.beginPath();
-        samples.forEach((value, index) => {
-          const x = padding + (plotWidth * index) / (samples.length - 1);
-          const y = padding + plotHeight - ((value - min) / (max - min)) * plotHeight;
-          if (index === 0) context.moveTo(x, y);
-          else context.lineTo(x, y);
-        });
+        points.forEach(([x, y], index) => (index === 0 ? context.moveTo(x, y) : context.lineTo(x, y)));
         context.stroke();
+
+        const [endX, endY] = points[points.length - 1];
+        context.fillStyle = color;
+        context.beginPath();
+        context.arc(endX, endY, 3.5 * ratio, 0, Math.PI * 2);
+        context.fill();
       }
-      document.getElementById("historyHint").textContent =
-        `Last ${feeds.length} channel update${feeds.length === 1 ? "" : "s"}`;
+      if (feeds.length) {
+        document.getElementById("historyHint").textContent =
+          `Last ${feeds.length} channel update${feeds.length === 1 ? "" : "s"}`;
+      }
     }
 
+    /* The device decides the tier and publishes it as field6. The dashboard only
+       maps that number to display text, so the thresholds live in firmware alone. */
+    const ALERT_TIERS = {
+      0: { level: 0, title: "No tier triggered", state: "ok", action: "No listed condition currently matches." },
+      1: { level: 1, title: "Tier 1: Watch", state: "watch", action: "Increase scouting: inspect middle canopy leaves. Ensure adequate soil moisture to prevent plant stress. No shade net adjustment is required unless light exceeds 80%." },
+      2: { level: 2, title: "Tier 2: Alert", state: "alert", action: "Deploy 30-40% shade nets to reduce leaf temperature by 3-5 °C. Increase ventilation to lower internal heat, but monitor RH to avoid excessive drying." },
+      3: { level: 3, title: "Tier 3: Critical", state: "critical", action: "Deploy 40-50% shade nets immediately. Use gentle overhead misting or syringing to raise local RH and dislodge mites. Reduce ventilation if external air is extremely dry." }
+    };
+
     function evaluateAlertTier(readings) {
-      const criticalReasons = [];
-      if (readings.temperature !== null && readings.temperature > 34) {
-        criticalReasons.push(`temperature > 34 °C (${readings.temperature.toFixed(1)} °C)`);
-      }
-      if (readings.humidity !== null && readings.humidity < 40) {
-        criticalReasons.push(`humidity < 40% (${readings.humidity.toFixed(1)}%)`);
-      }
-      if (readings.light !== null && readings.light > 50) {
-        criticalReasons.push(`light > 50% (${readings.light}%)`);
-      }
-      if (criticalReasons.length) {
-        return {
-          level: 3,
-          title: "Tier 3: Critical",
-          state: "critical",
-          reasons: criticalReasons,
-          action: "Deploy 40–50% shade nets immediately. Use gentle overhead misting or syringing to raise local RH and dislodge mites. Reduce ventilation if external air is extremely dry."
-        };
-      }
-
-      const alertReasons = [];
-      if (readings.temperature !== null && readings.temperature >= 30 && readings.temperature <= 34) {
-        alertReasons.push(`temperature 30–34 °C (${readings.temperature.toFixed(1)} °C)`);
-      }
-      if (readings.humidity !== null && readings.humidity < 50) {
-        alertReasons.push(`humidity < 50% (${readings.humidity.toFixed(1)}%)`);
-      }
-      if (readings.light !== null && readings.light > 60) {
-        alertReasons.push(`light > 60% (${readings.light}%)`);
-      }
-      if (alertReasons.length) {
-        return {
-          level: 2,
-          title: "Tier 2: Alert",
-          state: "alert",
-          reasons: alertReasons,
-          action: "Deploy 30–40% shade nets to reduce leaf temperature by 3–5 °C. Increase ventilation to lower internal heat, but monitor RH to avoid excessive drying."
-        };
-      }
-
-      const watchReasons = [];
-      if (readings.temperature !== null && readings.temperature >= 27 && readings.temperature <= 30) {
-        watchReasons.push(`temperature 27–30 °C (${readings.temperature.toFixed(1)} °C)`);
-      }
-      if (readings.humidity !== null && readings.humidity >= 50 && readings.humidity <= 60) {
-        watchReasons.push(`humidity 50–60% (${readings.humidity.toFixed(1)}%)`);
-      }
-      if (readings.light !== null && readings.light > 70) {
-        watchReasons.push(`light > 70% (${readings.light}%)`);
-      }
-      if (watchReasons.length) {
-        return {
-          level: 1,
-          title: "Tier 1: Watch",
-          state: "watch",
-          reasons: watchReasons,
-          action: "Increase scouting: inspect middle canopy leaves. Ensure adequate soil moisture to prevent plant stress. No shade net adjustment is required unless light exceeds 80%."
-        };
-      }
+      const tier = ALERT_TIERS[readings.tier];
+      if (tier) return { ...tier, reasons: [] };
       return {
         level: 0,
-        title: "No tier triggered",
-        state: "ok",
+        title: "Alert tier not reported",
+        state: "waiting",
         reasons: [],
-        action: "No listed condition currently matches."
+        action: "This entry has no field6. Flash the updated firmware and enable Field 6 on the ThingSpeak channel."
       };
     }
 
     function checkAlerts(readings) {
       const alert = evaluateAlertTier(readings);
       alertPanel.dataset.state = alert.state;
+      alertPanel.dataset.level = String(alert.level);
       alertTitle.textContent = alert.title;
-      alertText.textContent = alert.level
-        ? `${alert.reasons.join("; ")}. Recommended action: ${alert.action}`
-        : alert.action;
+      alertReasons.replaceChildren(...alert.reasons.map((reason) => {
+        const item = document.createElement("li");
+        item.textContent = reason;
+        return item;
+      }));
+      if (alert.level) {
+        const label = document.createElement("strong");
+        label.textContent = "Recommended action: ";
+        alertText.replaceChildren(label, document.createTextNode(alert.action));
+      } else {
+        alertText.textContent = alert.action;
+      }
 
       const signature = alert.level ? String(alert.level) : "";
       if (signature && signature !== previousAlertSignature &&
@@ -549,7 +673,8 @@
         humidity: parseField(entry.field2),
         light: parseField(entry.field3),
         adc: parseField(entry.field4),
-        statusCode: parseField(entry.field5)
+        statusCode: parseField(entry.field5),
+        tier: parseField(entry.field6)
       };
       const lightStatus = ["DARK", "SHADED", "INDOOR", "BRIGHT", "SUNNY", "ERROR"][readings.statusCode];
       fields.temperature.textContent = readings.temperature === null ? "--.-" : readings.temperature.toFixed(1);
@@ -560,7 +685,10 @@
       fields.lightStatus.textContent = lightStatus || (readings.light === null ? "No reading" : "Unknown");
       fields.lightMeter.style.width = readings.light !== null && readings.light >= 0 && readings.light <= 100
         ? `${readings.light}%` : "0%";
-      fields.updatedAt.textContent = `Last update · ${entry.created_at ? new Date(entry.created_at).toLocaleTimeString() : "time unavailable"}`;
+      document.getElementById("temperatureCard").dataset.waiting = String(readings.temperature === null);
+      document.getElementById("humidityCard").dataset.waiting = String(readings.humidity === null);
+      document.getElementById("lightCard").dataset.waiting = String(readings.light === null);
+      fields.updatedAt.textContent = `Updated ${entry.created_at ? new Date(entry.created_at).toLocaleTimeString() : "(time unavailable)"}`;
       checkAlerts(readings);
     }
 
@@ -623,7 +751,7 @@
       setConnectionState("connecting", "Loading channel");
       connectButton.disabled = true;
       disconnectButton.hidden = false;
-      setMessage("Loading the latest reading from ThingSpeak…", "");
+      setMessage("Loading the latest reading from ThingSpeak...", "");
       await pollChannel();
       if (activeChannelId) pollTimer = setInterval(pollChannel, 15000);
     });
@@ -639,6 +767,21 @@
         ? "Browser notifications enabled."
         : "Notifications were not enabled. In-dashboard alerts will still work.", permission === "granted" ? "success" : "error");
     });
+
+    /* Redraw canvases when the layout or color scheme changes. */
+    let redrawQueued = false;
+    function queueRedraw() {
+      if (redrawQueued) return;
+      redrawQueued = true;
+      requestAnimationFrame(() => {
+        redrawQueued = false;
+        drawHistory(lastFeeds);
+      });
+    }
+    window.addEventListener("resize", queueRedraw);
+    window.matchMedia("(prefers-color-scheme: light)").addEventListener("change", queueRedraw);
+    drawHistory([]);
+
     const sharedChannelId = new URLSearchParams(window.location.search).get("channel");
     if (sharedChannelId && /^\d+$/.test(sharedChannelId)) {
       document.getElementById("channelId").value = sharedChannelId;
